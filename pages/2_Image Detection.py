@@ -95,7 +95,7 @@ if image_file is not None:
         x1, y1, x2, y2 = det.box
         label = f"{det.label} {det.score:.2f}"
         cv2.rectangle(_image, (x1, y1), (x2, y2), (255, 0, 0), 2)
-        cv2.putText(_image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+        cv2.putText(_image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2, cv2.LINE_AA)
     
     _image_pred = cv2.resize(_image, (w_ori, h_ori), interpolation=cv2.INTER_AREA)
 
