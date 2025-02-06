@@ -94,20 +94,20 @@ if image_file is not None:
         x1, y1, x2, y2 = det.box
         label_text = f"{det.label}: {det.score:.2f}"
 
-        # Font settings for slightly larger but balanced text
-        font_scale = 0.7  # Just slightly larger than default
-        font_thickness = 2
+        # Smaller font settings for better visibility
+        font_scale = 0.5  # Smaller text size
+        font_thickness = 1
         font = cv2.FONT_HERSHEY_SIMPLEX
 
         # Calculate text size
         (text_w, text_h), baseline = cv2.getTextSize(label_text, font, font_scale, font_thickness)
-        text_x, text_y = x1, max(y1 - 10, 20)  # Prevent text from going out of bounds
+        text_x, text_y = x1, max(y1 - 5, 15)  # Prevent text from going out of bounds
 
-        # Draw bounding box (thinner for clarity)
-        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        # Draw bounding box (thin for clarity)
+        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 1)
 
-        # Draw background rectangle for text (smallest possible size)
-        cv2.rectangle(annotated_frame, (text_x, text_y - text_h - 5), (text_x + text_w, text_y + 5), (0, 255, 0), -1)
+        # Draw background rectangle for text (minimal size)
+        cv2.rectangle(annotated_frame, (text_x, text_y - text_h - 3), (text_x + text_w, text_y + 3), (0, 255, 0), -1)
 
         # Draw text label with confidence score
         cv2.putText(annotated_frame, label_text, (text_x, text_y), font, font_scale, (0, 0, 0), font_thickness)
@@ -176,4 +176,3 @@ if image_file is not None:
             file_name="RDD_Report.pdf",
             mime="application/pdf"
         )
-
