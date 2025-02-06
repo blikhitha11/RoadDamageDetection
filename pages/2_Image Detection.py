@@ -94,10 +94,10 @@ if image_file is not None:
     for det in detections:
         x1, y1, x2, y2 = det.box
         label = f"{det.label} {det.score:.2f}"
-        cv2.rectangle(_image, (x1, y1), (x2, y2), (0, 255, 0), 3)  # Thicker green box
-        (text_width, text_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 1, 2)
-        cv2.rectangle(_image, (x1, y1 - text_height - 5), (x1 + text_width, y1), (0, 255, 0), -1)  # Background
-        cv2.putText(_image, label, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)  # White text
+        cv2.rectangle(_image, (x1, y1), (x2, y2), (0, 0, 255), 3)  # Red bounding box for better visibility
+        (text_width, text_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 1.5, 3)
+        cv2.rectangle(_image, (x1, y1 - text_height - 10), (x1 + text_width, y1), (0, 0, 255), -1)  # Red background
+        cv2.putText(_image, label, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 3, cv2.LINE_AA)  # White text
     
     _image_pred = cv2.resize(_image, (w_ori, h_ori), interpolation=cv2.INTER_AREA)
 
