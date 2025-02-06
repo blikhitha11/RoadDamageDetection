@@ -90,8 +90,14 @@ if image_file is not None:
             for _box in boxes
         ]
 
-    annotated_frame = results[0].plot()
-    _image_pred = cv2.resize(annotated_frame, (w_ori, h_ori), interpolation=cv2.INTER_AREA)
+    # Annotate image manually with labels
+    for det in detections:
+        x1, y1, x2, y2 = det.box
+        label = f"{det.label} {det.score:.2f}"
+        cv2.rectangle(_image, (x1, y1), (x2, y2), (255, 0, 0), 2)
+        cv2.putText(_image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+    
+    _image_pred = cv2.resize(_image, (w_ori, h_ori), interpolation=cv2.INTER_AREA)
 
     # Original Image
     with col1:
