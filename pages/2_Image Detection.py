@@ -55,7 +55,7 @@ class Detection(NamedTuple):
     box: np.ndarray
 
 st.title("Road Damage Detection - Image")
-st.write("Detect the road damage in using an Image input. Upload the image and start detecting. This section can be useful for examining baseline data.")
+st.write("Detect the road damage using an image input. Upload the image and start detecting. This section can be useful for examining baseline data.")
 
 image_file = st.file_uploader("Upload Image", type=['png', 'jpg'])
 
@@ -144,6 +144,7 @@ if image_file is not None:
             pdf.cell(200, 10, txt=f"Confidence: {det.score:.2f}", ln=True)
             pdf.cell(200, 10, txt=f"Bounding Box: {det.box}", ln=True)
 
+        # Correct PDF generation using BytesIO
         pdf_output = BytesIO()
         pdf.output(pdf_output)
         pdf_output.seek(0)
