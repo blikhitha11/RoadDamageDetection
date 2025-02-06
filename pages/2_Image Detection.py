@@ -1,18 +1,20 @@
 import os
 import logging
+import pandas as pd
 from pathlib import Path
 from typing import NamedTuple
+from fpdf import FPDF  # Importing FPDF for generating PDF reports
 
 import cv2
 import numpy as np
 import streamlit as st
-
-# Deep learning framework
-from ultralytics import YOLO
 from PIL import Image
 from io import BytesIO
 
 from sample_utils.download import download_file
+
+# Deep learning framework
+from ultralytics import YOLO
 
 st.set_page_config(
     page_title="Image Detection",
@@ -72,24 +74,25 @@ if image_file is not None:
     h_ori = _image.shape[0]
     w_ori = _image.shape[1]
 
-    image_resized = cv2.resize(_image, (640, 640), interpolation = cv2.INTER_AREA)
+    image_resized = cv2.resize(_image, (640, 640), interpolation=cv2.INTER_AREA)
     results = net.predict(image_resized, conf=score_threshold)
     
     # Save the results
+    detections = []
     for result in results:
         boxes = result.boxes.cpu().numpy()
         detections = [
-           Detection(
-               class_id=int(_box.cls),
-               label=CLASSES[int(_box.cls)],
-               score=float(_box.conf),
-               box=_box.xyxy[0].astype(int),
+            Detection(
+                class_id=int(_box.cls),
+                label=CLASSES[int(_box.cls)],
+                score=float(_box.conf),
+                box=_box.xyxy[0].astype(int),
             )
             for _box in boxes
         ]
 
     annotated_frame = results[0].plot()
-    _image_pred = cv2.resize(annotated_frame, (w_ori, h_ori), interpolation = cv2.INTER_AREA)
+    _image_pred = cv2.resize(annotated_frame, (w_ori, h_ori), interpolation=cv2.INTER_AREA)
 
     # Original Image
     with col1:
@@ -112,4 +115,42 @@ if image_file is not None:
             data=_downloadImagesByte,
             file_name="RDD_Prediction.png",
             mime="image/png"
+        )
+
+        # Generate a CSV Report
+        df = pd.DataFrame([{
+            "Damage Type": det.label,
+            "Confidence": det.score,
+            "Bounding Box": str(det.box)
+        } for det in detections])
+
+        csv_report = df.to_csv(index=False)
+        st.download_button(
+            label="Download CSV Report",
+            data=csv_report,
+            file_name="RDD_Report.csv",
+            mime="text/csv"
+        )
+
+        # Generate a PDF Report
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
+        pdf.cell(200, 10, txt="Road Damage Detection Report", ln=True, align="C")
+
+        for det in detections:
+            pdf.ln(10)
+            pdf.cell(200, 10, txt=f"Damage Type: {det.label}", ln=True)
+            pdf.cell(200, 10, txt=f"Confidence: {det.score:.2f}", ln=True)
+            pdf.cell(200, 10, txt=f"Bounding Box: {det.box}", ln=True)
+
+        pdf_output = BytesIO()
+        pdf.output(pdf_output)
+        pdf_output.seek(0)
+
+        st.download_button(
+            label="Download PDF Report",
+            data=pdf_output,
+            file_name="RDD_Report.pdf",
+            mime="application/pdf"
         )
