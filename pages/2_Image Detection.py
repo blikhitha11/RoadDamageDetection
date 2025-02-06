@@ -144,14 +144,14 @@ if image_file is not None:
             pdf.cell(200, 10, txt=f"Confidence: {det.score:.2f}", ln=True)
             pdf.cell(200, 10, txt=f"Bounding Box: {det.box}", ln=True)
 
-        # Fixing PDF output with BytesIO handling
+        # Save the PDF to a BytesIO object
         pdf_output = BytesIO()
         pdf.output(pdf_output)
         pdf_output.seek(0)
 
         st.download_button(
             label="Download PDF Report",
-            data=pdf_output.getvalue(),
+            data=pdf_output.read(),
             file_name="RDD_Report.pdf",
             mime="application/pdf"
         )
