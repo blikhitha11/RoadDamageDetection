@@ -3,7 +3,7 @@ import logging
 import pandas as pd
 from pathlib import Path
 from typing import NamedTuple
-from fpdf import FPDF  # Importing FPDF for generating PDF reports
+from fpdf import FPDF  # For PDF generation
 
 import cv2
 import numpy as np
@@ -13,7 +13,7 @@ from io import BytesIO
 
 from sample_utils.download import download_file
 
-# Deep learning framework
+# Load YOLOv8 model
 from ultralytics import YOLO
 
 st.set_page_config(
@@ -28,12 +28,11 @@ ROOT = HERE.parent
 
 logger = logging.getLogger(__name__)
 
-MODEL_URL = "https://github.com/oracl4/RoadDamageDetection/raw/main/models/YOLOv8_Small_RDD.pt"  # noqa: E501
+MODEL_URL = "https://github.com/oracl4/RoadDamageDetection/raw/main/models/YOLOv8_Small_RDD.pt"
 MODEL_LOCAL_PATH = ROOT / "./models/YOLOv8_Small_RDD.pt"
 download_file(MODEL_URL, MODEL_LOCAL_PATH, expected_size=89569358)
 
-# Session-specific caching
-# Load the model
+# Load YOLO model
 cache_key = "yolov8smallrdd"
 if cache_key in st.session_state:
     net = st.session_state[cache_key]
@@ -55,28 +54,26 @@ class Detection(NamedTuple):
     box: np.ndarray
 
 st.title("Road Damage Detection - Image")
-st.write("Detect the road damage using an image input. Upload the image and start detecting. This section can be useful for examining baseline data.")
+st.write("Detect road damage using an image input. Upload the image and start detecting.")
 
 image_file = st.file_uploader("Upload Image", type=['png', 'jpg'])
 
 score_threshold = st.slider("Confidence Threshold", min_value=0.0, max_value=1.0, value=0.5, step=0.05)
-st.write("Lower the threshold if there is no damage detected, and increase the threshold if there is false prediction.")
+st.write("Lower the threshold if no damage is detected, and increase it if there are false predictions.")
 
 if image_file is not None:
-    # Load the image
+    # Load and convert the image
     image = Image.open(image_file)
-    
+    _image = np.array(image)
+    h_ori, w_ori, _ = _image.shape
+
     col1, col2 = st.columns(2)
 
-    # Perform inference
-    _image = np.array(image)
-    h_ori = _image.shape[0]
-    w_ori = _image.shape[1]
-
+    # Resize image for YOLO input
     image_resized = cv2.resize(_image, (640, 640), interpolation=cv2.INTER_AREA)
     results = net.predict(image_resized, conf=score_threshold)
-    
-    # Save the results
+
+    # Process detections
     detections = []
     for result in results:
         boxes = result.boxes.cpu().numpy()
@@ -90,15 +87,41 @@ if image_file is not None:
             for _box in boxes
         ]
 
-    annotated_frame = results[0].plot()
+    # Draw bounding boxes and labels
+    annotated_frame = _image.copy()
+
+    for det in detections:
+        x1, y1, x2, y2 = det.box
+        label_text = f"{det.label}: {det.score:.2f}"
+
+        # Define font properties
+        font_scale = 1.5
+        font_thickness = 3
+        font = cv2.FONT_HERSHEY_SIMPLEX
+
+        # Adjust position to prevent overlap
+        text_x, text_y = x1, max(y1 - 10, 30)
+
+        # Calculate text size for background
+        (text_w, text_h), baseline = cv2.getTextSize(label_text, font, font_scale, font_thickness)
+
+        # Draw bounding box (thicker)
+        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 4)
+
+        # Draw background rectangle for text
+        cv2.rectangle(annotated_frame, (text_x, text_y - text_h - 5), (text_x + text_w, text_y + 5), (0, 255, 0), -1)
+
+        # Draw text label (black text on green background)
+        cv2.putText(annotated_frame, label_text, (text_x, text_y), font, font_scale, (0, 0, 0), font_thickness)
+
+    # Resize annotated image to original dimensions
     _image_pred = cv2.resize(annotated_frame, (w_ori, h_ori), interpolation=cv2.INTER_AREA)
 
-    # Original Image
+    # Display images
     with col1:
         st.write("#### Image")
         st.image(_image)
-    
-    # Predicted Image
+
     with col2:
         st.write("#### Predictions")
         st.image(_image_pred)
@@ -109,7 +132,7 @@ if image_file is not None:
         _downloadImages.save(buffer, format="PNG")
         _downloadImagesByte = buffer.getvalue()
 
-        downloadButton = st.download_button(
+        st.download_button(
             label="Download Prediction Image",
             data=_downloadImagesByte,
             file_name="RDD_Prediction.png",
@@ -143,9 +166,9 @@ if image_file is not None:
             pdf.cell(200, 10, txt=f"Confidence: {det.score:.2f}", ln=True)
             pdf.cell(200, 10, txt=f"Bounding Box: {det.box}", ln=True)
 
-        # Save the PDF to a BytesIO object
+        # Save PDF as BytesIO object
         pdf_output = BytesIO()
-        pdf_bytes = pdf.output(dest='S').encode('latin1')  # Fix output error
+        pdf_bytes = pdf.output(dest='S').encode('latin1')
         pdf_output.write(pdf_bytes)
         pdf_output.seek(0)
 
