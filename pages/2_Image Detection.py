@@ -63,7 +63,6 @@ score_threshold = st.slider("Confidence Threshold", min_value=0.0, max_value=1.0
 st.write("Lower the threshold if there is no damage detected, and increase the threshold if there is false prediction.")
 
 if image_file is not None:
-
     # Load the image
     image = Image.open(image_file)
     
@@ -146,7 +145,8 @@ if image_file is not None:
 
         # Save the PDF to a BytesIO object
         pdf_output = BytesIO()
-        pdf.output(pdf_output)
+        pdf_bytes = pdf.output(dest='S').encode('latin1')  # Fix output error
+        pdf_output.write(pdf_bytes)
         pdf_output.seek(0)
 
         st.download_button(
