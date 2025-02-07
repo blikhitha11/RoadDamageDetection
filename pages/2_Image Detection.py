@@ -183,3 +183,36 @@ if image_file is not None:
             file_name="RDD_Report.csv",
             mime="text/csv"
         )
+
+        # **📄 PDF GENERATION**
+        class PDF(FPDF):
+            def header(self):
+                self.set_font("Arial", "B", 14)
+                self.cell(200, 10, "Road Damage Detection Report", ln=True, align="C")
+                self.ln(10)
+
+        pdf = PDF()
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.add_page()
+
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(200, 10, "Detected Damage Details:", ln=True)
+
+        pdf.set_font("Arial", "", 10)
+        for det in detections:
+            severity, _ = get_severity(det.box, det.score)
+            pdf.cell(200, 10, f"- {det.label}: {severity} ({det.score:.2f})", ln=True)
+
+        pdf.ln(10)
+        pdf.image(buffer, x=10, y=None, w=150)  # Add prediction image
+
+        pdf_output = BytesIO()
+        pdf.output(pdf_output)
+        pdf_output.seek(0)
+
+        st.download_button(
+            label="Download PDF Report",
+            data=pdf_output,
+            file_name="RDD_Report.pdf",
+            mime="application/pdf"
+        )
