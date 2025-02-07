@@ -107,31 +107,31 @@ if image_file is not None:
         label_text = f"{det.label} {det.score:.2f}"
         severity, color = get_severity(det.box, det.score)
 
-        font_scale = 0.6
-        font_thickness = 2
+        font_scale = 0.5  # Reduced text size
+        font_thickness = 1  # Reduced thickness
         font = cv2.FONT_HERSHEY_SIMPLEX
 
         bbox_color = (0, 255, 0) if severity == "Minor" else (0, 165, 255) if severity == "Moderate" else (0, 0, 255)
 
-        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), bbox_color, 3)
+        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), bbox_color, 2)
 
         (text_width, text_height), _ = cv2.getTextSize(label_text, font, font_scale, font_thickness)
-        text_offset_x, text_offset_y = x1, y1 - 10
+        text_offset_x, text_offset_y = x1, y1 - 5
 
         if text_offset_y < text_height:
             text_offset_y = y1 + text_height + 5
 
         cv2.rectangle(
             annotated_frame,
-            (text_offset_x, text_offset_y - text_height),
-            (text_offset_x + text_width, text_offset_y),
+            (text_offset_x, text_offset_y - text_height - 2),
+            (text_offset_x + text_width + 2, text_offset_y),
             bbox_color,
             thickness=cv2.FILLED
         )
 
         cv2.putText(
             annotated_frame, label_text,
-            (text_offset_x, text_offset_y - 2),
+            (text_offset_x + 1, text_offset_y - 2),
             font, font_scale, (255, 255, 255), font_thickness, cv2.LINE_AA
         )
 
@@ -144,43 +144,3 @@ if image_file is not None:
     with col2:
         st.write("### Predicted Image")
         st.image(_image_pred)
-
-        severity_set = set()
-        for det in detections:
-            severity, color = get_severity(det.box, det.score)
-            severity_set.add((det.label, severity, color))
-
-        if severity_set:
-            st.markdown("### Severity Levels:")
-            for label, severity, color in severity_set:
-                st.markdown(f"<span style='color:{color}; font-weight:bold;'>{label} - {severity}</span>", unsafe_allow_html=True)
-
-        buffer = BytesIO()
-        _downloadImages = Image.fromarray(_image_pred)
-        _downloadImages.save(buffer, format="PNG")
-        _downloadImagesByte = buffer.getvalue()
-
-        st.download_button(
-            label="Download Prediction Image",
-            data=_downloadImagesByte,
-            file_name="RDD_Prediction.png",
-            mime="image/png"
-        )
-
-        df = pd.DataFrame([
-            {
-                "Damage Type": det.label,
-                "Confidence": det.score,
-                "Bounding Box": str(det.box),
-                "Severity Level": get_severity(det.box, det.score)[0]
-            }
-            for det in detections
-        ])
-
-        csv_report = df.to_csv(index=False)
-        st.download_button(
-            label="Download CSV Report",
-            data=csv_report,
-            file_name="RDD_Report.csv",
-            mime="text/csv"
-        )
