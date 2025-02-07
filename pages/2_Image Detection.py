@@ -1,6 +1,3 @@
-lets go one by one 
-iam giving image detction.py first
-
 import os
 import logging
 import pandas as pd
