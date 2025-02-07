@@ -168,6 +168,7 @@ if image_file is not None:
             mime="image/png"
         )
 
+        # Generate CSV Report
         csv_report = pd.DataFrame([{
             "Damage Type": det.label,
             "Confidence": det.score,
@@ -190,23 +191,21 @@ if image_file is not None:
         pdf.cell(200, 10, "Road Damage Detection Report", ln=True, align='C')
         pdf.ln(10)
 
-        pdf.set_font("Arial", size=12)
+        pdf.set_font("Arial", size=10)
         for det in detections:
-            pdf.cell(200, 10, f"Damage Type: {det.label}, Severity: {get_severity(det.box, det.score)[0]}", ln=True)
-        pdf.ln(10)
+            severity, _ = get_severity(det.box, det.score)
+            x1, y1, x2, y2 = det.box
+            pdf.cell(200, 8, f"Damage Type: {det.label}, Confidence: {det.score:.2f}", ln=True)
+            pdf.cell(200, 8, f"Bounding Box: ({x1}, {y1}), ({x2}, {y2})", ln=True)
+            pdf.cell(200, 8, f"Severity Level: {severity}", ln=True)
+            pdf.ln(5)
 
-        # Save image to a temporary file before adding it to the PDF
-        with NamedTemporaryFile(delete=False, suffix=".png") as temp_file:
-            temp_path = temp_file.name
-            _downloadImages.save(temp_path, format="PNG")
-
-        pdf.image(temp_path, x=10, y=None, w=150)  # Add prediction image
+        pdf.add_page()
+        pdf.image(buffer, x=10, y=None, w=150)
 
         pdf_buffer = BytesIO()
-        pdf_bytes = pdf.output(dest="S").encode("latin1")  # Generate PDF bytes
-        pdf_buffer.write(pdf_bytes)
+        pdf.output(pdf_buffer, dest="S")
         pdf_buffer.seek(0)
-
 
         st.download_button(
             label="Download PDF Report",
