@@ -107,8 +107,8 @@ if image_file is not None:
         label_text = f"{det.label} {det.score:.2f}"
         severity, color = get_severity(det.box, det.score)
 
-        font_scale = 0.5  # Reduced text size
-        font_thickness = 1  # Reduced thickness
+        font_scale = 0.5  # Adjusted text size
+        font_thickness = 1
         font = cv2.FONT_HERSHEY_SIMPLEX
 
         bbox_color = (0, 255, 0) if severity == "Minor" else (0, 165, 255) if severity == "Moderate" else (0, 0, 255)
@@ -145,8 +145,29 @@ if image_file is not None:
         st.write("### Predicted Image")
         st.image(_image_pred)
 
-        # Restore CSV and PDF report generation
-        df = pd.DataFrame([
+        severity_set = set()
+        for det in detections:
+            severity, color = get_severity(det.box, det.score)
+            severity_set.add((det.label, severity, color))
+
+        if severity_set:
+            st.markdown("### Severity Levels:")
+            for label, severity, color in severity_set:
+                st.markdown(f"<span style='color:{color}; font-weight:bold;'>{label} - {severity}</span>", unsafe_allow_html=True)
+
+        buffer = BytesIO()
+        _downloadImages = Image.fromarray(_image_pred)
+        _downloadImages.save(buffer, format="PNG")
+        _downloadImagesByte = buffer.getvalue()
+
+        st.download_button(
+            label="Download Prediction Image",
+            data=_downloadImagesByte,
+            file_name="RDD_Prediction.png",
+            mime="image/png"
+        )
+
+        csv_report = pd.DataFrame([
             {
                 "Damage Type": det.label,
                 "Confidence": det.score,
@@ -154,38 +175,11 @@ if image_file is not None:
                 "Severity Level": get_severity(det.box, det.score)[0]
             }
             for det in detections
-        ])
+        ]).to_csv(index=False)
 
-        csv_report = df.to_csv(index=False)
         st.download_button(
             label="Download CSV Report",
             data=csv_report,
             file_name="RDD_Report.csv",
             mime="text/csv"
-        )
-
-        # Generate PDF Report
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Arial", size=12)
-        pdf.cell(200, 10, txt="Road Damage Detection Report", ln=True, align="C")
-
-        for det in detections:
-            severity, _ = get_severity(det.box, det.score)
-            pdf.ln(10)
-            pdf.cell(200, 10, txt=f"Damage Type: {det.label}", ln=True)
-            pdf.cell(200, 10, txt=f"Confidence: {det.score:.2f}", ln=True)
-            pdf.cell(200, 10, txt=f"Bounding Box: {det.box}", ln=True)
-            pdf.cell(200, 10, txt=f"Severity Level: {severity}", ln=True)
-
-        pdf_output = BytesIO()
-        pdf_bytes = pdf.output(dest='S').encode('latin1')
-        pdf_output.write(pdf_bytes)
-        pdf_output.seek(0)
-
-        st.download_button(
-            label="Download PDF Report",
-            data=pdf_output.read(),
-            file_name="RDD_Report.pdf",
-            mime="application/pdf"
         )
