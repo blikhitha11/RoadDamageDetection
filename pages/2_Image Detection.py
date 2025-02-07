@@ -19,7 +19,7 @@ from ultralytics import YOLO
 
 st.set_page_config(
     page_title="Road Damage Detection",
-    page_icon="📷",
+    page_icon="\ud83d\udcf7",
     layout="centered",
     initial_sidebar_state="expanded"
 )
@@ -108,18 +108,18 @@ if image_file is not None:
         label_text = f"{det.label} {det.score:.2f}"
         severity, color = get_severity(det.box, det.score)
 
-        font_scale = 0.8  # Increased for better visibility
-        font_thickness = 2  # Increased thickness
+        font_scale = 1.2  # Increased for better visibility
+        font_thickness = 3  # Increased thickness
         font = cv2.FONT_HERSHEY_SIMPLEX
 
         bbox_color = (0, 255, 0) if severity == "Minor" else (0, 165, 255) if severity == "Moderate" else (0, 0, 255)
 
-        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), bbox_color, 2)
+        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), bbox_color, 3)
 
         # Draw background rectangle for label
         text_size = cv2.getTextSize(label_text, font, font_scale, font_thickness)[0]
         text_x, text_y = x1, y1 - 10
-        cv2.rectangle(annotated_frame, (text_x, text_y - text_size[1] - 3), (text_x + text_size[0] + 3, text_y + 3), bbox_color, -1)
+        cv2.rectangle(annotated_frame, (text_x, text_y - text_size[1] - 5), (text_x + text_size[0] + 10, text_y + 5), bbox_color, -1)
 
         # Draw text with outline for better visibility
         cv2.putText(annotated_frame, label_text, (x1, y1 - 5), font, font_scale, (0, 0, 0), font_thickness + 2)  # Black outline
@@ -134,65 +134,3 @@ if image_file is not None:
     with col2:
         st.write("### Predicted Image")
         st.image(_image_pred)
-
-        severity_set = set()
-        for det in detections:
-            severity, color = get_severity(det.box, det.score)
-            severity_set.add((det.label, severity, color))
-
-        if severity_set:
-            st.markdown("### Severity Levels:")
-            for label, severity, color in severity_set:
-                st.markdown(f"<span style='color:{color}; font-weight:bold;'>{label} - {severity}</span>", unsafe_allow_html=True)
-
-        # Generate CSV Report
-        csv_report = pd.DataFrame([{
-            "Damage Type": det.label,
-            "Confidence": det.score,
-            "Bounding Box": str(det.box),
-            "Severity Level": get_severity(det.box, det.score)[0]
-        } for det in detections]).to_csv(index=False)
-
-        st.download_button(
-            label="Download CSV Report",
-            data=csv_report,
-            file_name="RDD_Report.csv",
-            mime="text/csv"
-        )
-
-        # Generate PDF Report
-        pdf = FPDF()
-        pdf.set_auto_page_break(auto=True, margin=15)
-        pdf.add_page()
-        pdf.set_font("Arial", style="B", size=16)
-        pdf.cell(200, 10, "Road Damage Detection Report", ln=True, align='C')
-        pdf.ln(10)
-
-        pdf.set_font("Arial", size=10)
-        for det in detections:
-            severity, _ = get_severity(det.box, det.score)
-            x1, y1, x2, y2 = det.box
-            pdf.cell(200, 8, f"Damage Type: {det.label}, Confidence: {det.score:.2f}", ln=True)
-            pdf.cell(200, 8, f"Bounding Box: ({x1}, {y1}), ({x2}, {y2})", ln=True)
-            pdf.cell(200, 8, f"Severity Level: {severity}", ln=True)
-            pdf.ln(5)
-
-        with NamedTemporaryFile(delete=False, suffix=".png") as temp_file:
-            temp_path = temp_file.name
-            _downloadImages = Image.fromarray(_image_pred)
-            _downloadImages.save(temp_path, format="PNG")
-
-        pdf.add_page()
-        pdf.image(temp_path, x=10, y=None, w=150)
-
-        pdf_buffer = BytesIO()
-        pdf_bytes = pdf.output(dest="S").encode("latin1")
-        pdf_buffer.write(pdf_bytes)
-        pdf_buffer.seek(0)
-
-        st.download_button(
-            label="Download PDF Report",
-            data=pdf_buffer,
-            file_name="RDD_Report.pdf",
-            mime="application/pdf"
-        )
