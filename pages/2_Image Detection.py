@@ -203,8 +203,10 @@ if image_file is not None:
         pdf.image(temp_path, x=10, y=None, w=150)  # Add prediction image
 
         pdf_buffer = BytesIO()
-        pdf.output(pdf_buffer, "F")
+        pdf_bytes = pdf.output(dest="S").encode("latin1")  # Generate PDF bytes
+        pdf_buffer.write(pdf_bytes)
         pdf_buffer.seek(0)
+
 
         st.download_button(
             label="Download PDF Report",
