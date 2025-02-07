@@ -12,8 +12,6 @@ from PIL import Image
 from io import BytesIO
 
 from sample_utils.download import download_file
-
-# Load YOLOv8 model
 from ultralytics import YOLO
 
 st.set_page_config(
@@ -40,12 +38,7 @@ else:
     net = YOLO(MODEL_LOCAL_PATH)
     st.session_state[cache_key] = net
 
-CLASSES = [
-    "Longitudinal Crack",
-    "Transverse Crack",
-    "Alligator Crack",
-    "Potholes"
-]
+CLASSES = ["Longitudinal Crack", "Transverse Crack", "Alligator Crack", "Potholes"]
 
 class Detection(NamedTuple):
     class_id: int
@@ -55,15 +48,14 @@ class Detection(NamedTuple):
 
 # Severity classification
 def get_severity(box, score):
-    width = box[2] - box[0]
-    height = box[3] - box[1]
+    width, height = box[2] - box[0], box[3] - box[1]
     area = width * height  # Bounding box area
 
-    if area < 5000:  # Small area
+    if area < 5000:
         return "Minor", "green"
-    elif area < 15000 and score >= 0.6:  # Medium area & high confidence
+    elif area < 15000 and score >= 0.6:
         return "Moderate", "orange"
-    elif area >= 15000 and score >= 0.8:  # Large area & very high confidence
+    elif area >= 15000 and score >= 0.8:
         return "Severe", "red"
     else:
         return "Minor", "green"
@@ -88,7 +80,6 @@ if image_file is not None:
     image_resized = cv2.resize(_image, (640, 640), interpolation=cv2.INTER_AREA)
     results = net.predict(image_resized, conf=score_threshold)
 
-    # Process detections
     detections = []
     for result in results:
         boxes = result.boxes.cpu().numpy()
@@ -104,69 +95,59 @@ if image_file is not None:
 
     # Draw bounding boxes and labels
     annotated_frame = _image.copy()
+    severity_set = set()  # Store unique (label, severity) pairs
 
     for det in detections:
         x1, y1, x2, y2 = det.box
         label_text = f"{det.label}: {det.score:.2f}"
         severity, color = get_severity(det.box, det.score)
+        severity_set.add((det.label, severity, color))
 
         # Font settings
-        font_scale = 0.5
-        font_thickness = 1
+        font_scale, font_thickness = 0.5, 1
         font = cv2.FONT_HERSHEY_SIMPLEX
 
-        # Calculate text size
-        (text_w, text_h), baseline = cv2.getTextSize(label_text, font, font_scale, font_thickness)
-        text_x, text_y = x1, max(y1 - 5, 15)  # Prevent text from going out of bounds
-
-        # Bounding box color (severity-based)
+        # Bounding box color
         bbox_color = (0, 255, 0) if severity == "Minor" else (0, 165, 255) if severity == "Moderate" else (0, 0, 255)
 
         # Draw bounding box
         cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), bbox_color, 2)
 
-        # Draw text background
-        cv2.rectangle(annotated_frame, (text_x, text_y - text_h - 3), (text_x + text_w, text_y + 3), bbox_color, -1)
-
         # Draw label
-        cv2.putText(annotated_frame, label_text, (text_x, text_y), font, font_scale, (0, 0, 0), font_thickness)
+        cv2.putText(annotated_frame, label_text, (x1, max(y1 - 5, 15)), font, font_scale, (0, 0, 0), font_thickness)
 
-    # Resize annotated image to original dimensions
+    # Resize annotated image back to original dimensions
     _image_pred = cv2.resize(annotated_frame, (w_ori, h_ori), interpolation=cv2.INTER_AREA)
 
     # Display images
     with col1:
-        st.write("#### Image")
+        st.write("#### Original Image")
         st.image(_image)
 
     with col2:
-        st.write("#### Predictions")
+        st.write("#### Predicted Image")
         st.image(_image_pred)
 
-        # Display severity levels once
-        severity_texts = []
-        for det in detections:
-            severity, color = get_severity(det.box, det.score)
-            severity_texts.append(f"<span style='color:{color}; font-weight:bold;'>{det.label} - {severity}</span>")
-
-        if severity_texts:
+        # Display unique severity levels
+        if severity_set:
             st.markdown("#### Severity Levels:")
-            st.markdown("<br>".join(severity_texts), unsafe_allow_html=True)
+            severity_html = [
+                f"<span style='color:{color}; font-weight:bold;'>{label} - {severity}</span>"
+                for label, severity, color in severity_set
+            ]
+            st.markdown("<br>".join(severity_html), unsafe_allow_html=True)
 
-        # Download predicted image
+        # Download annotated image
         buffer = BytesIO()
-        _downloadImages = Image.fromarray(_image_pred)
-        _downloadImages.save(buffer, format="PNG")
-        _downloadImagesByte = buffer.getvalue()
-
+        Image.fromarray(_image_pred).save(buffer, format="PNG")
         st.download_button(
             label="Download Prediction Image",
-            data=_downloadImagesByte,
+            data=buffer.getvalue(),
             file_name="RDD_Prediction.png",
             mime="image/png"
         )
 
-        # Generate a CSV Report
+        # Generate CSV report
         df = pd.DataFrame([{
             "Damage Type": det.label,
             "Confidence": det.score,
@@ -174,15 +155,14 @@ if image_file is not None:
             "Severity Level": get_severity(det.box, det.score)[0]
         } for det in detections])
 
-        csv_report = df.to_csv(index=False)
         st.download_button(
             label="Download CSV Report",
-            data=csv_report,
+            data=df.to_csv(index=False),
             file_name="RDD_Report.csv",
             mime="text/csv"
         )
 
-        # Generate a PDF Report
+        # Generate PDF report
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", size=12)
@@ -196,7 +176,7 @@ if image_file is not None:
             pdf.cell(200, 10, txt=f"Bounding Box: {det.box}", ln=True)
             pdf.cell(200, 10, txt=f"Severity Level: {severity}", ln=True)
 
-        # Save PDF as BytesIO object
+        # Save PDF and provide download button
         pdf_output = BytesIO()
         pdf_bytes = pdf.output(dest='S').encode('latin1')
         pdf_output.write(pdf_bytes)
