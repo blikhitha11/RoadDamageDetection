@@ -181,7 +181,8 @@ if image_file is not None:
 
         # Save PDF to BytesIO and fix corrupt issue
         pdf_buffer = BytesIO()
-        pdf.output(pdf_buffer, "F")  
+        pdf_bytes = pdf.output(dest="S").encode("latin1")  
+        pdf_buffer.write(pdf_bytes)
         pdf_buffer.seek(0)
 
         st.download_button(
