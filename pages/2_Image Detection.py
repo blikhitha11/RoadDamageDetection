@@ -19,7 +19,7 @@ from ultralytics import YOLO
 
 st.set_page_config(
     page_title="Road Damage Detection",
-    page_icon="\ud83d\udcf7",
+    page_icon=":camera:",  # Fixed UnicodeEncodeError
     layout="centered",
     initial_sidebar_state="expanded"
 )
@@ -58,7 +58,7 @@ class Detection(NamedTuple):
 def get_severity(box, score):
     width = box[2] - box[0]
     height = box[3] - box[1]
-    area = width * height  # Bounding box area
+    area = width * height
 
     if area < 5000:
         return "Minor", "green"
@@ -108,7 +108,7 @@ if image_file is not None:
         label_text = f"{det.label} {det.score:.2f}"
         severity, color = get_severity(det.box, det.score)
 
-        font_scale = 1.2  # Increased for better visibility
+        font_scale = 1.0  # Increased for better visibility
         font_thickness = 3  # Increased thickness
         font = cv2.FONT_HERSHEY_SIMPLEX
 
@@ -119,11 +119,11 @@ if image_file is not None:
         # Draw background rectangle for label
         text_size = cv2.getTextSize(label_text, font, font_scale, font_thickness)[0]
         text_x, text_y = x1, y1 - 10
-        cv2.rectangle(annotated_frame, (text_x, text_y - text_size[1] - 5), (text_x + text_size[0] + 10, text_y + 5), bbox_color, -1)
+        cv2.rectangle(annotated_frame, (text_x, text_y - text_size[1] - 3), (text_x + text_size[0] + 3, text_y + 3), bbox_color, -1)
 
         # Draw text with outline for better visibility
-        cv2.putText(annotated_frame, label_text, (x1, y1 - 5), font, font_scale, (0, 0, 0), font_thickness + 2)  # Black outline
-        cv2.putText(annotated_frame, label_text, (x1, y1 - 5), font, font_scale, (255, 255, 255), font_thickness)  # White text
+        cv2.putText(annotated_frame, label_text, (x1, y1 - 5), font, font_scale, (0, 0, 0), font_thickness + 2)
+        cv2.putText(annotated_frame, label_text, (x1, y1 - 5), font, font_scale, (255, 255, 255), font_thickness)
 
     _image_pred = cv2.resize(annotated_frame, (w_ori, h_ori), interpolation=cv2.INTER_AREA)
 
@@ -134,3 +134,20 @@ if image_file is not None:
     with col2:
         st.write("### Predicted Image")
         st.image(_image_pred)
+
+        severity_set = set()
+        for det in detections:
+            severity, color = get_severity(det.box, det.score)
+            severity_set.add((det.label, severity, color))
+
+        if severity_set:
+            st.markdown("### Severity Levels:")
+            for label, severity, color in severity_set:
+                st.markdown(f"<span style='color:{color}; font-weight:bold;'>{label} - {severity}</span>", unsafe_allow_html=True)
+
+    st.download_button(
+        label="Download CSV Report",
+        data=pd.DataFrame([{ "Damage Type": det.label, "Confidence": det.score, "Bounding Box": str(det.box), "Severity Level": get_severity(det.box, det.score)[0] } for det in detections]).to_csv(index=False),
+        file_name="RDD_Report.csv",
+        mime="text/csv"
+    )
