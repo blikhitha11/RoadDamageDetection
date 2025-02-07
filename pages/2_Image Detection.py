@@ -85,19 +85,15 @@ if image_file is not None:
     # Resize image for YOLO input
     image_resized = cv2.resize(_image, (640, 640), interpolation=cv2.INTER_AREA)
     
-    # Use Instance Segmentation instead of Object Detection
-    results = net.predict(image_resized, conf=score_threshold, task="segment")
+    # Restore Original Detection (Object Detection, NOT Segmentation)
+    results = net.predict(image_resized, conf=score_threshold)
 
     detections = []
-    masks = []  # Store masks separately
 
     for result in results:
         boxes = result.boxes.cpu().numpy()
-        
-        if result.masks is not None:  # Ensure segmentation masks exist
-            masks = result.masks.data.cpu().numpy()
 
-        for i, _box in enumerate(boxes):
+        for _box in boxes:
             x1, y1, x2, y2 = _box.xyxy[0].astype(int)
             area = (x2 - x1) * (y2 - y1)
             severity = "Minor"
@@ -115,33 +111,22 @@ if image_file is not None:
                 )
             )
 
-    # Draw masks if available
-    annotated_frame = _image.copy()
+    # Restore Original Image Drawing Logic
+    _image_pred = _image.copy()
 
-    if masks:
-        for mask in masks:
-            mask_resized = cv2.resize(mask, (w_ori, h_ori), interpolation=cv2.INTER_NEAREST)
-            mask_binary = (mask_resized > 0.5).astype(np.uint8) * 255
-            annotated_frame = cv2.addWeighted(annotated_frame, 1, cv2.cvtColor(mask_binary, cv2.COLOR_GRAY2BGR), 0.5, 0)
-
-    # Draw bounding boxes and labels
     for det in detections:
         x1, y1, x2, y2 = det.box
-        label_text = f"{det.label} ({det.severity}): {det.score:.2f}"
+        label_text = f"{det.label}: {det.score:.2f}"
         color = SEVERITY_COLORS[det.severity]
 
         font_scale = 0.5
         font_thickness = 1
         font = cv2.FONT_HERSHEY_SIMPLEX
 
-        (text_w, text_h), baseline = cv2.getTextSize(label_text, font, font_scale, font_thickness)
-        text_x, text_y = x1, max(y1 - 5, 15)
+        cv2.rectangle(_image_pred, (x1, y1), (x2, y2), color, 2)
+        cv2.putText(_image_pred, label_text, (x1, y1 - 5), font, font_scale, color, font_thickness)
 
-        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 2)
-        cv2.rectangle(annotated_frame, (text_x, text_y - text_h - 3), (text_x + text_w, text_y + 3), color, -1)
-        cv2.putText(annotated_frame, label_text, (text_x, text_y), font, font_scale, (0, 0, 0), font_thickness)
-
-    _image_pred = cv2.resize(annotated_frame, (w_ori, h_ori), interpolation=cv2.INTER_AREA)
+    _image_pred = cv2.resize(_image_pred, (w_ori, h_ori), interpolation=cv2.INTER_AREA)
 
     with col1:
         st.write("#### Image")
