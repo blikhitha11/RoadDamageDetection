@@ -4,6 +4,7 @@ import pandas as pd
 from pathlib import Path
 from typing import NamedTuple
 from fpdf import FPDF  # For PDF generation
+from tempfile import NamedTemporaryFile
 
 import cv2
 import numpy as np
@@ -167,15 +168,12 @@ if image_file is not None:
             mime="image/png"
         )
 
-        csv_report = pd.DataFrame([
-            {
-                "Damage Type": det.label,
-                "Confidence": det.score,
-                "Bounding Box": str(det.box),
-                "Severity Level": get_severity(det.box, det.score)[0]
-            }
-            for det in detections
-        ]).to_csv(index=False)
+        csv_report = pd.DataFrame([{
+            "Damage Type": det.label,
+            "Confidence": det.score,
+            "Bounding Box": str(det.box),
+            "Severity Level": get_severity(det.box, det.score)[0]
+        } for det in detections]).to_csv(index=False)
 
         st.download_button(
             label="Download CSV Report",
@@ -184,35 +182,33 @@ if image_file is not None:
             mime="text/csv"
         )
 
-        # **📄 PDF GENERATION**
-        class PDF(FPDF):
-            def header(self):
-                self.set_font("Arial", "B", 14)
-                self.cell(200, 10, "Road Damage Detection Report", ln=True, align="C")
-                self.ln(10)
-
-        pdf = PDF()
+        # Generate PDF Report
+        pdf = FPDF()
         pdf.set_auto_page_break(auto=True, margin=15)
         pdf.add_page()
-
-        pdf.set_font("Arial", "B", 12)
-        pdf.cell(200, 10, "Detected Damage Details:", ln=True)
-
-        pdf.set_font("Arial", "", 10)
-        for det in detections:
-            severity, _ = get_severity(det.box, det.score)
-            pdf.cell(200, 10, f"- {det.label}: {severity} ({det.score:.2f})", ln=True)
-
+        pdf.set_font("Arial", style="B", size=16)
+        pdf.cell(200, 10, "Road Damage Detection Report", ln=True, align='C')
         pdf.ln(10)
-        pdf.image(buffer, x=10, y=None, w=150)  # Add prediction image
 
-        pdf_output = BytesIO()
-        pdf.output(pdf_output)
-        pdf_output.seek(0)
+        pdf.set_font("Arial", size=12)
+        for det in detections:
+            pdf.cell(200, 10, f"Damage Type: {det.label}, Severity: {get_severity(det.box, det.score)[0]}", ln=True)
+        pdf.ln(10)
+
+        # Save image to a temporary file before adding it to the PDF
+        with NamedTemporaryFile(delete=False, suffix=".png") as temp_file:
+            temp_path = temp_file.name
+            _downloadImages.save(temp_path, format="PNG")
+
+        pdf.image(temp_path, x=10, y=None, w=150)  # Add prediction image
+
+        pdf_buffer = BytesIO()
+        pdf.output(pdf_buffer, "F")
+        pdf_buffer.seek(0)
 
         st.download_button(
             label="Download PDF Report",
-            data=pdf_output,
+            data=pdf_buffer,
             file_name="RDD_Report.pdf",
             mime="application/pdf"
         )
