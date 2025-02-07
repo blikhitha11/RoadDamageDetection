@@ -52,20 +52,21 @@ class Detection(NamedTuple):
     label: str
     score: float
     box: np.ndarray
-    severity: str  # New field for severity level
 
+# Severity classification
 def get_severity(box, score):
-    """Determine severity based on bounding box area and confidence score."""
-    x1, y1, x2, y2 = box
-    area = (x2 - x1) * (y2 - y1)
+    width = box[2] - box[0]
+    height = box[3] - box[1]
+    area = width * height  # Bounding box area
 
     if area < 5000:  # Small area
         return "Minor", "green"
-    elif area < 20000 and score >= 0.6:  # Medium area, high confidence
+    elif area < 15000 and score >= 0.6:  # Medium area & high confidence
         return "Moderate", "orange"
-    elif area >= 20000 and score >= 0.8:  # Large area, very high confidence
+    elif area >= 15000 and score >= 0.8:  # Large area & very high confidence
         return "Severe", "red"
-    return "Minor", "green"  # Default to Minor
+    else:
+        return "Minor", "green"
 
 st.title("Road Damage Detection - Image")
 st.write("Detect road damage using an image input. Upload the image and start detecting.")
@@ -97,7 +98,6 @@ if image_file is not None:
                 label=CLASSES[int(_box.cls)],
                 score=float(_box.conf),
                 box=_box.xyxy[0].astype(int),
-                severity=get_severity(_box.xyxy[0].astype(int), float(_box.conf))[0]  # Get severity level
             )
             for _box in boxes
         ]
@@ -110,30 +110,25 @@ if image_file is not None:
         label_text = f"{det.label}: {det.score:.2f}"
         severity, color = get_severity(det.box, det.score)
 
-        # Smaller font settings for better visibility
-        font_scale = 0.5  # Smaller text size
+        # Font settings
+        font_scale = 0.5
         font_thickness = 1
         font = cv2.FONT_HERSHEY_SIMPLEX
-
-        # Color mappings
-        color_map = {
-            "green": (0, 255, 0),
-            "orange": (0, 165, 255),
-            "red": (0, 0, 255)
-        }
-        box_color = color_map[color]
 
         # Calculate text size
         (text_w, text_h), baseline = cv2.getTextSize(label_text, font, font_scale, font_thickness)
         text_x, text_y = x1, max(y1 - 5, 15)  # Prevent text from going out of bounds
 
+        # Bounding box color (severity-based)
+        bbox_color = (0, 255, 0) if severity == "Minor" else (0, 165, 255) if severity == "Moderate" else (0, 0, 255)
+
         # Draw bounding box
-        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), box_color, 1)
+        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), bbox_color, 2)
 
-        # Draw background rectangle for text
-        cv2.rectangle(annotated_frame, (text_x, text_y - text_h - 3), (text_x + text_w, text_y + 3), box_color, -1)
+        # Draw text background
+        cv2.rectangle(annotated_frame, (text_x, text_y - text_h - 3), (text_x + text_w, text_y + 3), bbox_color, -1)
 
-        # Draw text label with confidence score
+        # Draw label
         cv2.putText(annotated_frame, label_text, (text_x, text_y), font, font_scale, (0, 0, 0), font_thickness)
 
     # Resize annotated image to original dimensions
@@ -148,10 +143,15 @@ if image_file is not None:
         st.write("#### Predictions")
         st.image(_image_pred)
 
-        # Severity levels in text
+        # Display severity levels once
+        severity_texts = []
         for det in detections:
             severity, color = get_severity(det.box, det.score)
-            st.markdown(f"<span style='color:{color}; font-weight:bold;'>Severity: {severity}</span>", unsafe_allow_html=True)
+            severity_texts.append(f"<span style='color:{color}; font-weight:bold;'>{det.label} - {severity}</span>")
+
+        if severity_texts:
+            st.markdown("#### Severity Levels:")
+            st.markdown("<br>".join(severity_texts), unsafe_allow_html=True)
 
         # Download predicted image
         buffer = BytesIO()
@@ -171,7 +171,7 @@ if image_file is not None:
             "Damage Type": det.label,
             "Confidence": det.score,
             "Bounding Box": str(det.box),
-            "Severity": det.severity
+            "Severity Level": get_severity(det.box, det.score)[0]
         } for det in detections])
 
         csv_report = df.to_csv(index=False)
@@ -189,11 +189,12 @@ if image_file is not None:
         pdf.cell(200, 10, txt="Road Damage Detection Report", ln=True, align="C")
 
         for det in detections:
+            severity, _ = get_severity(det.box, det.score)
             pdf.ln(10)
             pdf.cell(200, 10, txt=f"Damage Type: {det.label}", ln=True)
             pdf.cell(200, 10, txt=f"Confidence: {det.score:.2f}", ln=True)
             pdf.cell(200, 10, txt=f"Bounding Box: {det.box}", ln=True)
-            pdf.cell(200, 10, txt=f"Severity: {det.severity}", ln=True)
+            pdf.cell(200, 10, txt=f"Severity Level: {severity}", ln=True)
 
         # Save PDF as BytesIO object
         pdf_output = BytesIO()
