@@ -124,6 +124,9 @@ if image_file is not None:
         st.write("#### Predictions")
         st.image(_image_pred)
 
+        # Display Severity Level Text
+        st.write("Severity: Level Name")
+
         # Download predicted image
         buffer = BytesIO()
         _downloadImages = Image.fromarray(_image_pred)
