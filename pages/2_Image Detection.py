@@ -100,7 +100,7 @@ if image_file is not None:
             for _box in boxes
         ]
 
-    # Draw bounding boxes and labels with better visibility
+    # Draw bounding boxes and labels
     annotated_frame = _image.copy()
 
     for det in detections:
@@ -108,37 +108,15 @@ if image_file is not None:
         label_text = f"{det.label} {det.score:.2f}"
         severity, color = get_severity(det.box, det.score)
 
-        font_scale = 1  # Increased text size
-        font_thickness = 2  # Increased thickness
+        font_scale = 0.5  
+        font_thickness = 1
         font = cv2.FONT_HERSHEY_SIMPLEX
 
         bbox_color = (0, 255, 0) if severity == "Minor" else (0, 165, 255) if severity == "Moderate" else (0, 0, 255)
 
-        # Draw bounding box
-        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), bbox_color, 3)
+        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), bbox_color, 2)
 
-        # Get text size for background rectangle
-        (text_width, text_height), _ = cv2.getTextSize(label_text, font, font_scale, font_thickness)
-        text_offset_x, text_offset_y = x1, y1 - 10
-
-        if text_offset_y < text_height:
-            text_offset_y = y1 + text_height + 10
-
-        # Draw filled rectangle behind text for better visibility
-        cv2.rectangle(
-            annotated_frame,
-            (text_offset_x, text_offset_y - text_height - 5),
-            (text_offset_x + text_width + 5, text_offset_y + 5),
-            bbox_color,
-            thickness=cv2.FILLED
-        )
-
-        # Put label text on image
-        cv2.putText(
-            annotated_frame, label_text,
-            (text_offset_x + 3, text_offset_y - 3),
-            font, font_scale, (255, 255, 255), font_thickness, cv2.LINE_AA
-        )
+        cv2.putText(annotated_frame, label_text, (x1, y1 - 5), font, font_scale, (255, 255, 255), font_thickness)
 
     _image_pred = cv2.resize(annotated_frame, (w_ori, h_ori), interpolation=cv2.INTER_AREA)
 
@@ -150,17 +128,29 @@ if image_file is not None:
         st.write("### Predicted Image")
         st.image(_image_pred)
 
-        # Add "Download Prediction Image" button
-        buffer = BytesIO()
-        _downloadImages = Image.fromarray(_image_pred)
-        _downloadImages.save(buffer, format="PNG")
-        _downloadImagesByte = buffer.getvalue()
+        severity_set = set()
+        for det in detections:
+            severity, color = get_severity(det.box, det.score)
+            severity_set.add((det.label, severity, color))
+
+        if severity_set:
+            st.markdown("### Severity Levels:")
+            for label, severity, color in severity_set:
+                st.markdown(f"<span style='color:{color}; font-weight:bold;'>{label} - {severity}</span>", unsafe_allow_html=True)
+
+        # Generate CSV Report
+        csv_report = pd.DataFrame([{
+            "Damage Type": det.label,
+            "Confidence": det.score,
+            "Bounding Box": str(det.box),
+            "Severity Level": get_severity(det.box, det.score)[0]
+        } for det in detections]).to_csv(index=False)
 
         st.download_button(
-            label="Download Prediction Image",
-            data=_downloadImagesByte,
-            file_name="RDD_Prediction.png",
-            mime="image/png"
+            label="Download CSV Report",
+            data=csv_report,
+            file_name="RDD_Report.csv",
+            mime="text/csv"
         )
 
         # Generate PDF Report
@@ -180,16 +170,18 @@ if image_file is not None:
             pdf.cell(200, 8, f"Severity Level: {severity}", ln=True)
             pdf.ln(5)
 
-        # Add predicted image to PDF
+        # Save image to a temporary file before adding it to the PDF
         with NamedTemporaryFile(delete=False, suffix=".png") as temp_file:
             temp_path = temp_file.name
+            _downloadImages = Image.fromarray(_image_pred)
             _downloadImages.save(temp_path, format="PNG")
 
         pdf.add_page()
         pdf.image(temp_path, x=10, y=None, w=150)
 
+        # Save PDF to BytesIO and fix corrupt issue
         pdf_buffer = BytesIO()
-        pdf_bytes = pdf.output(dest="S").encode("latin1")
+        pdf_bytes = pdf.output(dest="S").encode("latin1")  
         pdf_buffer.write(pdf_bytes)
         pdf_buffer.seek(0)
 
