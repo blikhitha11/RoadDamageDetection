@@ -48,9 +48,15 @@ CLASSES = [
 ]
 
 SEVERITY_THRESHOLDS = {
-    "minor": 1000,
-    "moderate": 5000,
-    "severe": float('inf')
+    "Minor": 5000,
+    "Moderate": 15000,
+    "Severe": float('inf')
+}
+
+SEVERITY_COLORS = {
+    "Minor": (0, 255, 0),     # Green
+    "Moderate": (0, 165, 255), # Orange
+    "Severe": (0, 0, 255)      # Red
 }
 
 class Detection(NamedTuple):
@@ -59,16 +65,6 @@ class Detection(NamedTuple):
     score: float
     box: np.ndarray
     severity: str
-
-def classify_severity(box):
-    x1, y1, x2, y2 = box
-    area = (x2 - x1) * (y2 - y1)
-    if area < SEVERITY_THRESHOLDS["minor"]:
-        return "Minor"
-    elif area < SEVERITY_THRESHOLDS["moderate"]:
-        return "Moderate"
-    else:
-        return "Severe"
 
 st.title("Road Damage Detection - Image")
 st.write("Detect road damage using an image input. Upload the image and start detecting.")
@@ -94,23 +90,31 @@ if image_file is not None:
     detections = []
     for result in results:
         boxes = result.boxes.cpu().numpy()
-        detections = [
-            Detection(
-                class_id=int(_box.cls),
-                label=CLASSES[int(_box.cls)],
-                score=float(_box.conf),
-                box=_box.xyxy[0].astype(int),
-                severity=classify_severity(_box.xyxy[0].astype(int))
+        for _box in boxes:
+            x1, y1, x2, y2 = _box.xyxy[0].astype(int)
+            area = (x2 - x1) * (y2 - y1)
+            severity = "Minor"
+            for level, threshold in SEVERITY_THRESHOLDS.items():
+                if area < threshold:
+                    severity = level
+                    break
+            detections.append(
+                Detection(
+                    class_id=int(_box.cls),
+                    label=CLASSES[int(_box.cls)],
+                    score=float(_box.conf),
+                    box=_box.xyxy[0].astype(int),
+                    severity=severity
+                )
             )
-            for _box in boxes
-        ]
 
     # Draw bounding boxes and labels
     annotated_frame = _image.copy()
 
     for det in detections:
         x1, y1, x2, y2 = det.box
-        label_text = f"{det.label}: {det.score:.2f} ({det.severity})"
+        label_text = f"{det.label} ({det.severity}): {det.score:.2f}"
+        color = SEVERITY_COLORS[det.severity]
 
         # Smaller font settings for better visibility
         font_scale = 0.5  # Smaller text size
@@ -122,10 +126,10 @@ if image_file is not None:
         text_x, text_y = x1, max(y1 - 5, 15)  # Prevent text from going out of bounds
 
         # Draw bounding box (thin for clarity)
-        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 1)
+        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 2)
 
         # Draw background rectangle for text (minimal size)
-        cv2.rectangle(annotated_frame, (text_x, text_y - text_h - 3), (text_x + text_w, text_y + 3), (0, 255, 0), -1)
+        cv2.rectangle(annotated_frame, (text_x, text_y - text_h - 3), (text_x + text_w, text_y + 3), color, -1)
 
         # Draw text label with confidence score
         cv2.putText(annotated_frame, label_text, (text_x, text_y), font, font_scale, (0, 0, 0), font_thickness)
@@ -142,34 +146,9 @@ if image_file is not None:
         st.write("#### Predictions")
         st.image(_image_pred)
 
-        # Download predicted image
-        buffer = BytesIO()
-        _downloadImages = Image.fromarray(_image_pred)
-        _downloadImages.save(buffer, format="PNG")
-        _downloadImagesByte = buffer.getvalue()
-
-        st.download_button(
-            label="Download Prediction Image",
-            data=_downloadImagesByte,
-            file_name="RDD_Prediction.png",
-            mime="image/png"
-        )
-
-        # Generate a CSV Report
-        df = pd.DataFrame([{
-            "Damage Type": det.label,
-            "Confidence": det.score,
-            "Bounding Box": str(det.box),
-            "Severity": det.severity
-        } for det in detections])
-
-        csv_report = df.to_csv(index=False)
-        st.download_button(
-            label="Download CSV Report",
-            data=csv_report,
-            file_name="RDD_Report.csv",
-            mime="text/csv"
-        )
+        # Severity Label
+        if detections:
+            st.write(f"**Detected Severity:** {detections[0].severity}")
 
         # Generate a PDF Report
         pdf = FPDF()
@@ -180,9 +159,9 @@ if image_file is not None:
         for det in detections:
             pdf.ln(10)
             pdf.cell(200, 10, txt=f"Damage Type: {det.label}", ln=True)
+            pdf.cell(200, 10, txt=f"Severity: {det.severity}", ln=True)
             pdf.cell(200, 10, txt=f"Confidence: {det.score:.2f}", ln=True)
             pdf.cell(200, 10, txt=f"Bounding Box: {det.box}", ln=True)
-            pdf.cell(200, 10, txt=f"Severity: {det.severity}", ln=True)
 
         # Save PDF as BytesIO object
         pdf_output = BytesIO()
