@@ -108,7 +108,7 @@ if image_file is not None:
         label_text = f"{det.label} {det.score:.2f}"
         severity, color = get_severity(det.box, det.score)
 
-        font_scale = 0.5  
+        font_scale = 0.5  # Adjusted text size
         font_thickness = 1
         font = cv2.FONT_HERSHEY_SIMPLEX
 
@@ -146,69 +146,71 @@ if image_file is not None:
         st.write("### Predicted Image")
         st.image(_image_pred)
 
-    buffer = BytesIO()
-    _downloadImages = Image.fromarray(_image_pred)
-    _downloadImages.save(buffer, format="PNG")
-    _downloadImagesByte = buffer.getvalue()
+        severity_set = set()
+        for det in detections:
+            severity, color = get_severity(det.box, det.score)
+            severity_set.add((det.label, severity, color))
 
-    st.download_button(
-        label="Download Prediction Image",
-        data=_downloadImagesByte,
-        file_name="RDD_Prediction.png",
-        mime="image/png"
-    )
+        if severity_set:
+            st.markdown("### Severity Levels:")
+            for label, severity, color in severity_set:
+                st.markdown(f"<span style='color:{color}; font-weight:bold;'>{label} - {severity}</span>", unsafe_allow_html=True)
 
-    csv_report = pd.DataFrame([{
-        "Damage Type": det.label,
-        "Confidence Score": det.score,
-        "Bounding Box (x1, y1, x2, y2)": det.box.tolist(),
-        "Severity Level": get_severity(det.box, det.score)[0]
-    } for det in detections]).to_csv(index=False)
+        buffer = BytesIO()
+        _downloadImages = Image.fromarray(_image_pred)
+        _downloadImages.save(buffer, format="PNG")
+        _downloadImagesByte = buffer.getvalue()
 
-    st.download_button(
-        label="Download CSV Report",
-        data=csv_report,
-        file_name="RDD_Report.csv",
-        mime="text/csv"
-    )
+        st.download_button(
+            label="Download Prediction Image",
+            data=_downloadImagesByte,
+            file_name="RDD_Prediction.png",
+            mime="image/png"
+        )
 
-    # Generate PDF Report
-    pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.add_page()
-    pdf.set_font("Arial", style="B", size=16)
-    pdf.cell(200, 10, "Road Damage Detection Report", ln=True, align='C')
-    pdf.ln(10)
+        csv_report = pd.DataFrame([{
+            "Damage Type": det.label,
+            "Confidence": det.score,
+            "Bounding Box": str(det.box),
+            "Severity Level": get_severity(det.box, det.score)[0]
+        } for det in detections]).to_csv(index=False)
 
-    pdf.set_font("Arial", size=12)
-    pdf.cell(50, 10, "Damage Type", border=1)
-    pdf.cell(50, 10, "Confidence Score", border=1)
-    pdf.cell(50, 10, "Bounding Box", border=1)
-    pdf.cell(40, 10, "Severity", border=1)
-    pdf.ln()
+        st.download_button(
+            label="Download CSV Report",
+            data=csv_report,
+            file_name="RDD_Report.csv",
+            mime="text/csv"
+        )
 
-    for det in detections:
-        severity, _ = get_severity(det.box, det.score)
-        pdf.cell(50, 10, det.label, border=1)
-        pdf.cell(50, 10, f"{det.score:.2f}", border=1)
-        pdf.cell(50, 10, str(det.box.tolist()), border=1)
-        pdf.cell(40, 10, severity, border=1)
-        pdf.ln()
+        # Generate PDF Report
+        pdf = FPDF()
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.add_page()
+        pdf.set_font("Arial", style="B", size=16)
+        pdf.cell(200, 10, "Road Damage Detection Report", ln=True, align='C')
+        pdf.ln(10)
 
-    with NamedTemporaryFile(delete=False, suffix=".png") as temp_file:
-        temp_path = temp_file.name
-        _downloadImages.save(temp_path, format="PNG")
+        pdf.set_font("Arial", size=12)
+        for det in detections:
+            pdf.cell(200, 10, f"Damage Type: {det.label}, Severity: {get_severity(det.box, det.score)[0]}", ln=True)
+        pdf.ln(10)
 
-    pdf.image(temp_path, x=10, y=None, w=150)  
+        # Save image to a temporary file before adding it to the PDF
+        with NamedTemporaryFile(delete=False, suffix=".png") as temp_file:
+            temp_path = temp_file.name
+            _downloadImages.save(temp_path, format="PNG")
 
-    pdf_buffer = BytesIO()
-    pdf_bytes = pdf.output(dest="S").encode("latin1")  
-    pdf_buffer.write(pdf_bytes)
-    pdf_buffer.seek(0)
+        pdf.image(temp_path, x=10, y=None, w=150)  # Add prediction image
 
-    st.download_button(
-        label="Download PDF Report",
-        data=pdf_buffer,
-        file_name="RDD_Report.pdf",
-        mime="application/pdf"
-    )
+        pdf_buffer = BytesIO()
+        pdf_bytes = pdf.output(dest="S").encode("latin1")  # Generate PDF bytes
+        pdf_buffer.write(pdf_bytes)
+        pdf_buffer.seek(0)
+
+
+        st.download_button(
+            label="Download PDF Report",
+            data=pdf_buffer,
+            file_name="RDD_Report.pdf",
+            mime="application/pdf"
+        )
