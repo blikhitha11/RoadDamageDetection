@@ -47,11 +47,22 @@ CLASSES = [
     "Potholes"
 ]
 
+def classify_severity(area):
+    """Classify damage severity based on bounding box area."""
+    if area < 5000:
+        return "Minor"
+    elif area < 15000:
+        return "Moderate"
+    else:
+        return "Severe"
+
 class Detection(NamedTuple):
     class_id: int
     label: str
     score: float
     box: np.ndarray
+    area: int
+    severity: str
 
 st.title("Road Damage Detection - Image")
 st.write("Detect road damage using an image input. Upload the image and start detecting.")
@@ -62,18 +73,15 @@ score_threshold = st.slider("Confidence Threshold", min_value=0.0, max_value=1.0
 st.write("Lower the threshold if no damage is detected, and increase it if there are false predictions.")
 
 if image_file is not None:
-    # Load and convert the image
     image = Image.open(image_file)
     _image = np.array(image)
     h_ori, w_ori, _ = _image.shape
 
     col1, col2 = st.columns(2)
-
-    # Resize image for YOLO input
+    
     image_resized = cv2.resize(_image, (640, 640), interpolation=cv2.INTER_AREA)
     results = net.predict(image_resized, conf=score_threshold)
 
-    # Process detections
     detections = []
     for result in results:
         boxes = result.boxes.cpu().numpy()
@@ -83,39 +91,33 @@ if image_file is not None:
                 label=CLASSES[int(_box.cls)],
                 score=float(_box.conf),
                 box=_box.xyxy[0].astype(int),
+                area=(abs(_box.xyxy[0][2] - _box.xyxy[0][0]) * abs(_box.xyxy[0][3] - _box.xyxy[0][1])),
+                severity=classify_severity(
+                    abs(_box.xyxy[0][2] - _box.xyxy[0][0]) * abs(_box.xyxy[0][3] - _box.xyxy[0][1])
+                )
             )
             for _box in boxes
         ]
-
-    # Draw bounding boxes and labels
+    
     annotated_frame = _image.copy()
-
+    
     for det in detections:
         x1, y1, x2, y2 = det.box
-        label_text = f"{det.label}: {det.score:.2f}"
+        label_text = f"{det.label}: {det.score:.2f} ({det.severity})"
 
-        # Smaller font settings for better visibility
-        font_scale = 0.5  # Smaller text size
+        font_scale = 0.5
         font_thickness = 1
         font = cv2.FONT_HERSHEY_SIMPLEX
 
-        # Calculate text size
         (text_w, text_h), baseline = cv2.getTextSize(label_text, font, font_scale, font_thickness)
-        text_x, text_y = x1, max(y1 - 5, 15)  # Prevent text from going out of bounds
+        text_x, text_y = x1, max(y1 - 5, 15)
 
-        # Draw bounding box (thin for clarity)
         cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 1)
-
-        # Draw background rectangle for text (minimal size)
         cv2.rectangle(annotated_frame, (text_x, text_y - text_h - 3), (text_x + text_w, text_y + 3), (0, 255, 0), -1)
-
-        # Draw text label with confidence score
         cv2.putText(annotated_frame, label_text, (text_x, text_y), font, font_scale, (0, 0, 0), font_thickness)
-
-    # Resize annotated image to original dimensions
+    
     _image_pred = cv2.resize(annotated_frame, (w_ori, h_ori), interpolation=cv2.INTER_AREA)
 
-    # Display images
     with col1:
         st.write("#### Image")
         st.image(_image)
@@ -124,7 +126,6 @@ if image_file is not None:
         st.write("#### Predictions")
         st.image(_image_pred)
 
-        # Download predicted image
         buffer = BytesIO()
         _downloadImages = Image.fromarray(_image_pred)
         _downloadImages.save(buffer, format="PNG")
@@ -137,11 +138,12 @@ if image_file is not None:
             mime="image/png"
         )
 
-        # Generate a CSV Report
         df = pd.DataFrame([{
             "Damage Type": det.label,
             "Confidence": det.score,
-            "Bounding Box": str(det.box)
+            "Bounding Box": str(det.box),
+            "Area": det.area,
+            "Severity": det.severity
         } for det in detections])
 
         csv_report = df.to_csv(index=False)
@@ -152,7 +154,6 @@ if image_file is not None:
             mime="text/csv"
         )
 
-        # Generate a PDF Report
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", size=12)
@@ -163,8 +164,9 @@ if image_file is not None:
             pdf.cell(200, 10, txt=f"Damage Type: {det.label}", ln=True)
             pdf.cell(200, 10, txt=f"Confidence: {det.score:.2f}", ln=True)
             pdf.cell(200, 10, txt=f"Bounding Box: {det.box}", ln=True)
+            pdf.cell(200, 10, txt=f"Area: {det.area}", ln=True)
+            pdf.cell(200, 10, txt=f"Severity: {det.severity}", ln=True)
 
-        # Save PDF as BytesIO object
         pdf_output = BytesIO()
         pdf_bytes = pdf.output(dest='S').encode('latin1')
         pdf_output.write(pdf_bytes)
