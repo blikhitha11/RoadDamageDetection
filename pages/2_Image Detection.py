@@ -159,11 +159,10 @@ if image_file is not None:
         buffer = BytesIO()
         _downloadImages = Image.fromarray(_image_pred)
         _downloadImages.save(buffer, format="PNG")
-        _downloadImagesByte = buffer.getvalue()
 
         st.download_button(
             label="Download Prediction Image",
-            data=_downloadImagesByte,
+            data=buffer.getvalue(),
             file_name="RDD_Prediction.png",
             mime="image/png"
         )
@@ -200,8 +199,12 @@ if image_file is not None:
             pdf.cell(200, 8, f"Severity Level: {severity}", ln=True)
             pdf.ln(5)
 
+        with NamedTemporaryFile(delete=False, suffix=".png") as temp_file:
+            temp_path = temp_file.name
+            _downloadImages.save(temp_path, format="PNG")
+
         pdf.add_page()
-        pdf.image(buffer, x=10, y=None, w=150)
+        pdf.image(temp_path, x=10, y=None, w=150)
 
         pdf_buffer = BytesIO()
         pdf.output(pdf_buffer, dest="S")
