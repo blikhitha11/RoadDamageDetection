@@ -108,22 +108,22 @@ if image_file is not None:
         label_text = f"{det.label} {det.score:.2f}"
         severity, color = get_severity(det.box, det.score)
 
-        font_scale = 0.8  # Increased for better visibility
-        font_thickness = 2  # Increased thickness
+        font_scale = 0.6  # Reduced for better fit
+        font_thickness = 2
         font = cv2.FONT_HERSHEY_SIMPLEX
-
+        
         bbox_color = (0, 255, 0) if severity == "Minor" else (0, 165, 255) if severity == "Moderate" else (0, 0, 255)
-
+        
         cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), bbox_color, 2)
-
-        # Draw background rectangle for label
+        
+        # Ensure label stays inside image
         text_size = cv2.getTextSize(label_text, font, font_scale, font_thickness)[0]
-        text_x, text_y = x1, y1 - 10
+        text_x, text_y = x1, max(y1 - 10, text_size[1] + 5)  # Prevent label from going outside
+        
         cv2.rectangle(annotated_frame, (text_x, text_y - text_size[1] - 3), (text_x + text_size[0] + 3, text_y + 3), bbox_color, -1)
+        cv2.putText(annotated_frame, label_text, (text_x, text_y), font, font_scale, (0, 0, 0), font_thickness + 2)  # Black outline
+        cv2.putText(annotated_frame, label_text, (text_x, text_y), font, font_scale, (255, 255, 255), font_thickness)  # White text
 
-        # Draw text with outline for better visibility
-        cv2.putText(annotated_frame, label_text, (x1, y1 - 5), font, font_scale, (0, 0, 0), font_thickness + 2)  # Black outline
-        cv2.putText(annotated_frame, label_text, (x1, y1 - 5), font, font_scale, (255, 255, 255), font_thickness)  # White text
 
     _image_pred = cv2.resize(annotated_frame, (w_ori, h_ori), interpolation=cv2.INTER_AREA)
 
